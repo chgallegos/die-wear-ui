@@ -12,11 +12,13 @@ app = Flask(__name__)
 AZURE_ML_ENDPOINT = os.getenv("AZURE_ML_ENDPOINT", "").strip()
 AZURE_ML_KEY = os.getenv("AZURE_ML_KEY", "").strip()
 
-# If you want to force routing to a specific deployment while testing:
-# export AZURE_ML_DEPLOYMENT="die-wear-resnet18-ds3"
+# Optional: force routing to a specific deployment while testing
+# e.g. "die-wear-resnet18-ds3"
 AZURE_ML_DEPLOYMENT = os.getenv("AZURE_ML_DEPLOYMENT", "").strip()
 
-# Optional: used only if your score.py returns NOT_A_DIE probability
+# Turn NOT_A_DIE logic on/off (DEFAULT OFF)
+# Set ENABLE_NOT_DIE=1 only after your model actually includes NOT_A_DIE
+ENABLE_NOT_DIE = os.getenv("ENABLE_NOT_DIE", "0").strip() == "1"
 NOT_DIE_THRESHOLD = float(os.getenv("NOT_DIE_THRESHOLD", "0.55"))
 
 # Keep payload size sane (base64 can get big)
@@ -24,10 +26,7 @@ app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # 10 MB
 
 
 def call_azure_ml(image_bytes: bytes) -> Dict[str, Any]:
-    """
-    Sends base64 image JSON to Azure ML Online Endpoint.
-    Returns parsed JSON.
-    """
+    """Sends base64 image JSON to Azure ML Online Endpoint. Returns parsed JSON."""
     if not AZURE_ML_ENDPOINT or not AZURE_ML_KEY:
         raise RuntimeError("Missing AZURE_ML_ENDPOINT or AZURE_ML_KEY environment variables.")
 
@@ -40,7 +39,7 @@ def call_azure_ml(image_bytes: bytes) -> Dict[str, Any]:
         "Authorization": f"Bearer {AZURE_ML_KEY}",
     }
 
-    # Force a specific deployment (ds3) when AZURE_ML_DEPLOYMENT is set
+    # Force a specific deployment when AZURE_ML_DEPLOYMENT is set
     if AZURE_ML_DEPLOYMENT:
         headers["azureml-model-deployment"] = AZURE_ML_DEPLOYMENT
 
@@ -51,7 +50,7 @@ def call_azure_ml(image_bytes: bytes) -> Dict[str, Any]:
     return resp.json()
 
 
-def normalize_result(result: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_result(raw: Dict[str, Any]) -> Dict[str, Any]:
     """
     Normalizes output so the template can render consistently.
 
@@ -60,18 +59,15 @@ def normalize_result(result: Dict[str, Any]) -> Dict[str, Any]:
         "prediction": "REPLACE",
         "probabilities": {"OK": 0.27, "REPLACE": 0.43, "WARNING": 0.29}
       }
-
-    Optional future:
-      probabilities may include "NOT_A_DIE"
     """
-    prediction = (result.get("prediction") or "UNKNOWN").upper()
-    probs = result.get("probabilities", {}) or {}
+    prediction = (raw.get("prediction") or "UNKNOWN").upper()
+    probs = raw.get("probabilities", {}) or {}
 
-    # Optional NOT_A_DIE gate (only if your model returns it)
-    not_die_prob = probs.get("NOT_A_DIE", None)
-    if not_die_prob is not None:
+    # IMPORTANT:
+    # We DO NOT create "NOT_DIE" unless ENABLE_NOT_DIE=1 AND the model returns NOT_A_DIE.
+    if ENABLE_NOT_DIE and "NOT_A_DIE" in probs:
         try:
-            if float(not_die_prob) >= NOT_DIE_THRESHOLD:
+            if float(probs["NOT_A_DIE"]) >= NOT_DIE_THRESHOLD:
                 prediction = "NOT_A_DIE"
         except Exception:
             pass
@@ -106,23 +102,14 @@ def _render(result: Optional[Dict[str, Any]] = None, image_data_url: Optional[st
 
 @app.route("/", methods=["GET", "POST"])
 def index():
-    """
-    Supports BOTH:
-      - GET /  (page load)
-      - POST / (if the form posts to "/")
-    """
+    # Allow POST / (some platforms/forms end up here)
     if request.method == "GET":
         return _render(result=None, image_data_url=None)
-
-    # If someone POSTs to "/", treat it like predict
     return _handle_prediction_post()
 
 
 @app.post("/predict")
 def predict():
-    """
-    Primary POST handler used by the UI (recommended form action="/predict")
-    """
     return _handle_prediction_post()
 
 
@@ -148,6 +135,10 @@ def _handle_prediction_post():
 
     try:
         raw = call_azure_ml(image_bytes)
+
+        # Debug: confirm what Azure actually returned
+        print("RAW_AZURE_RESPONSE:", raw, flush=True)
+
         result = normalize_result(raw)
     except Exception as e:
         result = {
@@ -162,6 +153,5 @@ def _handle_prediction_post():
 
 
 if __name__ == "__main__":
-    # Run on 0.0.0.0 so it works in containers too
     port = int(os.getenv("PORT", "5000"))
     app.run(host="0.0.0.0", port=port)
