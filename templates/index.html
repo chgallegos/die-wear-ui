@@ -111,17 +111,20 @@
       text-transform: uppercase;
     }
 
-    .status.ok { outline: 2px solid rgba(22,163,74,.35); }
-    .status.ok .pill { background: rgba(22,163,74,.15); color: #a7f3d0; border-color: rgba(22,163,74,.35); }
+    .status.badge-ok { outline: 2px solid rgba(22,163,74,.35); }
+    .status.badge-ok .pill { background: rgba(22,163,74,.15); color: #a7f3d0; border-color: rgba(22,163,74,.35); }
 
-    .status.warning { outline: 2px solid rgba(245,158,11,.35); }
-    .status.warning .pill { background: rgba(245,158,11,.15); color: #fde68a; border-color: rgba(245,158,11,.35); }
+    .status.badge-warning { outline: 2px solid rgba(245,158,11,.35); }
+    .status.badge-warning .pill { background: rgba(245,158,11,.15); color: #fde68a; border-color: rgba(245,158,11,.35); }
 
-    .status.replace { outline: 2px solid rgba(220,38,38,.35); }
-    .status.replace .pill { background: rgba(220,38,38,.15); color: #fecaca; border-color: rgba(220,38,38,.35); }
+    .status.badge-replace { outline: 2px solid rgba(220,38,38,.35); }
+    .status.badge-replace .pill { background: rgba(220,38,38,.15); color: #fecaca; border-color: rgba(220,38,38,.35); }
 
-    .status.notdie { outline: 2px solid rgba(148,163,184,.35); }
-    .status.notdie .pill { background: rgba(148,163,184,.14); color: #e2e8f0; border-color: rgba(148,163,184,.35); }
+    .status.badge-notdie { outline: 2px solid rgba(148,163,184,.35); }
+    .status.badge-notdie .pill { background: rgba(148,163,184,.14); color: #e2e8f0; border-color: rgba(148,163,184,.35); }
+
+    .status.badge-neutral { outline: 2px solid rgba(148,163,184,.20); }
+    .status.badge-neutral .pill { background: rgba(148,163,184,.10); color: #e2e8f0; border-color: rgba(148,163,184,.20); }
 
     .probs {
       margin-top: 10px;
@@ -147,47 +150,52 @@
       <p>Upload a die photo → get <b>OK</b>, <b>WARNING</b>, or <b>REPLACE</b>.</p>
 
       <div class="topbar">
-        <span class="chip">Endpoint set: {{ "yes" if endpoint_set else "no" }}</span>
-        <span class="chip">Key set: {{ "yes" if key_set else "no" }}</span>
-        <span class="chip">NOT_DIE_THRESHOLD: {{ not_die_threshold }}</span>
-        <span class="chip">Max upload: {{ max_upload_mb }} MB</span>
+        <span class="chip">Endpoint: {{ endpoint if endpoint else "not set" }}</span>
+        <span class="chip">Deployment: {{ deployment if deployment else "traffic-split/default" }}</span>
       </div>
     </div>
 
     <div class="card">
       <div class="row">
         <div>
-          <form method="POST" enctype="multipart/form-data">
+          <!-- ✅ IMPORTANT: action + field name match Flask -->
+          <form method="POST" action="/predict" enctype="multipart/form-data">
             <div class="drop">
-              <input type="file" name="file" accept="image/*" required />
+              <input type="file" name="image" accept="image/*" required />
               <button class="btn" type="submit">Analyze Photo</button>
               <div class="hint">
                 For best consistency: keep distance/angle similar and avoid heavy glare.
                 <br/>
-                If you want to basically disable NOT_A_DIE, set <code>NOT_DIE_THRESHOLD=0.10</code>.
+                Tip: If you want to effectively disable NOT_A_DIE (if your model ever adds it),
+                set <code>NOT_DIE_THRESHOLD=1.0</code>.
               </div>
             </div>
           </form>
 
           {% if result %}
-            <div class="status {{ css_class }}">
+            <div class="status {{ result.badge_class }}">
               <div>
                 <div style="font-weight:900; font-size:16px; letter-spacing:.2px;">
-                  Result: {{ result }}
+                  Result: {{ result.prediction }}
                 </div>
-                {% if message %}
-                  <div style="color: var(--muted); margin-top:6px; line-height:1.35;">{{ message }}</div>
-                {% endif %}
+
+                <div style="color: var(--muted); margin-top:6px; line-height:1.35;">
+                  Routed via: <b>{{ result.deployment }}</b>
+                  {% if result.error %}
+                    <br/><span style="color:#fecaca;">{{ result.error }}</span>
+                  {% endif %}
+                </div>
               </div>
-              <div class="pill">{{ result }}</div>
+              <div class="pill">{{ result.prediction }}</div>
             </div>
 
-            {% if probabilities %}
+            {% if result.probabilities %}
               <div class="probs">
                 Probabilities:
-                <code>OK={{ probabilities.OK }}</code>
-                <code>WARNING={{ probabilities.WARNING }}</code>
-                <code>REPLACE={{ probabilities.REPLACE }}</code>
+                {% if result.probabilities.OK is defined %}<code>OK={{ result.probabilities.OK }}</code>{% endif %}
+                {% if result.probabilities.WARNING is defined %}<code>WARNING={{ result.probabilities.WARNING }}</code>{% endif %}
+                {% if result.probabilities.REPLACE is defined %}<code>REPLACE={{ result.probabilities.REPLACE }}</code>{% endif %}
+                {% if result.probabilities.NOT_A_DIE is defined %}<code>NOT_A_DIE={{ result.probabilities.NOT_A_DIE }}</code>{% endif %}
               </div>
             {% endif %}
           {% endif %}
