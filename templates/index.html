@@ -1,65 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Die Wear Check</title>
+
+  <style>
+    :root {
+      --bg:#0b0f14; --card:#121826; --text:#e6edf3; --muted:#9aa4b2;
+      --ok:#16a34a; --warn:#f59e0b; --bad:#dc2626; --neutral:#94a3b8;
+      --border:rgba(255,255,255,.08); --shadow:0 10px 30px rgba(0,0,0,.35);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+      background:
+        radial-gradient(1200px 800px at 20% 0%,rgba(59,130,246,.2),transparent 55%),
+        radial-gradient(900px 700px at 90% 10%,rgba(34,197,94,.14),transparent 50%),
+        var(--bg);
+      color:var(--text);padding:32px 16px;
+    }
+    .container{max-width:980px;margin:0 auto}
+    .header h1{margin:0;font-size:28px}
+    .header p{margin:6px 0 0;color:var(--muted)}
+    .topbar{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--muted)}
+    .chip{border:1px solid var(--border);border-radius:999px;padding:6px 10px;background:rgba(255,255,255,.04)}
+
+    .card{background:rgba(18,24,38,.92);border:1px solid var(--border);
+      border-radius:16px;padding:16px;box-shadow:var(--shadow)}
+
+    .row{display:grid;grid-template-columns:1.05fr .95fr;gap:16px}
+    @media(max-width:940px){.row{grid-template-columns:1fr}}
+
+    .dropzone{border:1px dashed rgba(255,255,255,.2);border-radius:14px;
+      padding:14px;background:rgba(0,0,0,.14)}
+    .dropzone.dragover{border-color:#3b82f6;background:rgba(59,130,246,.08)}
+
+    .btn{margin-top:10px;width:100%;border:0;border-radius:12px;
+      padding:12px 14px;background:#2563eb;color:#fff;font-weight:900;
+      cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px}
+    .btn:disabled{opacity:.6;cursor:not-allowed}
+
+    .spinner{width:16px;height:16px;border-radius:50%;
+      border:2px solid rgba(255,255,255,.35);
+      border-top-color:#fff;animation:spin .75s linear infinite;display:none}
+    .btn.loading .spinner{display:block}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    .hint{margin-top:10px;color:var(--muted);font-size:13px}
+
+    .preview{border:1px solid var(--border);border-radius:14px;
+      background:rgba(0,0,0,.18);display:grid;place-items:center;min-height:320px}
+    .preview img{width:100%;height:100%;object-fit:contain}
+
+    .status{margin-top:14px;border-radius:14px;padding:14px;
+      border:1px solid var(--border);background:rgba(255,255,255,.04);
+      display:flex;justify-content:space-between;gap:12px}
+    .pill{padding:7px 12px;border-radius:999px;font-weight:900;
+      border:1px solid rgba(255,255,255,.15);text-transform:uppercase}
+
+    .badge-ok{outline:2px solid rgba(22,163,74,.35)}
+    .badge-warning{outline:2px solid rgba(245,158,11,.35)}
+    .badge-replace{outline:2px solid rgba(220,38,38,.35)}
+    .badge-notdie{outline:2px solid rgba(148,163,184,.35)}
+    .badge-neutral{outline:2px solid rgba(148,163,184,.2)}
+
+    .bars{margin-top:12px}
+    .bar{display:grid;grid-template-columns:90px 1fr 50px;gap:10px;align-items:center;margin-top:8px}
+    .track{height:10px;border-radius:999px;border:1px solid var(--border);overflow:hidden}
+    .fill{height:100%}
+    .fill.ok{background:rgba(22,163,74,.7)}
+    .fill.warning{background:rgba(245,158,11,.7)}
+    .fill.replace{background:rgba(220,38,38,.7)}
+
+    details{margin-top:12px;border:1px solid var(--border);border-radius:12px;padding:10px}
+    summary{cursor:pointer;font-weight:900}
+  </style>
+</head>
+
+<body>
+<div class="container">
+  <div class="header">
+    <h1>Die Wear Check</h1>
+    <p>Upload a die photo → get <b>OK</b>, <b>WARNING</b>, or <b>REPLACE</b>.</p>
+    <div class="topbar">
+      <span class="chip">Endpoint set: {{ "yes" if endpoint_set else "no" }}</span>
+      <span class="chip">Key set: {{ "yes" if key_set else "no" }}</span>
+      <span class="chip">Deployment: {{ deployment }}</span>
+      <span class="chip">Max upload: {{ max_upload_mb }} MB</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <form id="uploadForm" method="POST" action="/predict" enctype="multipart/form-data">
+          <div id="dropzone" class="dropzone">
+            <input id="fileInput" type="file" name="image" accept="image/*" required />
+            <button id="analyzeBtn" class="btn" disabled>
+              <span class="spinner"></span>
+              <span id="btnText">Analyze Photo</span>
+            </button>
+            <div class="hint">Drag & drop supported. Keep angle & lighting consistent.</div>
+          </div>
+        </form>
+
+        {% if result %}
+          <div class="status {{ result.badge_class }}">
+            <div>
+              <b>Result: {{ result.prediction }}</b><br/>
+              {{ result.recommendation }}<br/>
+              Routed via <b>{{ result.deployment }}</b>
+              {% if result.latency_ms %} • {{ result.latency_ms }}ms{% endif %}
+            </div>
+            <div class="pill">{{ result.prediction }}</div>
+          </div>
+
+          <div class="bars">
+            <div class="bar">
+              <div>OK</div>
+              <div class="track"><div class="fill ok" style="width:{{ result.prob_percent.OK }}%"></div></div>
+              <div>{{ result.prob_percent.OK }}%</div>
+            </div>
+            <div class="bar">
+              <div>WARNING</div>
+              <div class="track"><div class="fill warning" style="width:{{ result.prob_percent.WARNING }}%"></div></div>
+              <div>{{ result.prob_percent.WARNING }}%</div>
+            </div>
+            <div class="bar">
+              <div>REPLACE</div>
+              <div class="track"><div class="fill replace" style="width:{{ result.prob_percent.REPLACE }}%"></div></div>
+              <div>{{ result.prob_percent.REPLACE }}%</div>
+            </div>
+          </div>
+
+          <details>
+            <summary>Model details</summary>
+            Endpoint: {{ endpoint }}<br/>
+            Gate present: {{ result.gate.present }}
+          </details>
+        {% endif %}
+      </div>
+
+      <div class="preview">
+        {% if image_data_url %}
+          <img src="{{ image_data_url }}">
+        {% else %}
+          <div style="color:var(--muted)">Image preview appears here</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
-  const form = document.getElementById("uploadForm");
-  const fileInput = document.getElementById("fileInput");
-  const analyzeBtn = document.getElementById("analyzeBtn");
-  const btnText = document.getElementById("btnText");
-  const dropzone = document.getElementById("dropzone");
-  const fileMeta = document.getElementById("fileMeta");
+const fileInput=document.getElementById("fileInput");
+const btn=document.getElementById("analyzeBtn");
+const btnText=document.getElementById("btnText");
+const dz=document.getElementById("dropzone");
+const form=document.getElementById("uploadForm");
 
-  function setLoading(isLoading) {
-    if (isLoading) {
-      analyzeBtn.classList.add("loading");
-      analyzeBtn.disabled = true;
-      btnText.textContent = "Analyzing...";
-    } else {
-      analyzeBtn.classList.remove("loading");
-      analyzeBtn.disabled = false;
-      btnText.textContent = "Analyze Photo";
-    }
-  }
+fileInput.addEventListener("change",()=>btn.disabled=!fileInput.files.length);
+form.addEventListener("submit",()=>{btn.classList.add("loading");btnText.textContent="Analyzing..."});
 
-  function hasFile() {
-    return fileInput.files && fileInput.files.length > 0;
-  }
-
-  function refreshButtonState() {
-    analyzeBtn.disabled = !hasFile();
-    const name = hasFile() ? fileInput.files[0].name : "none";
-    fileMeta.innerHTML = `Selected: <b>${name}</b>`;
-  }
-
-  fileInput.addEventListener("change", refreshButtonState);
-  window.addEventListener("load", refreshButtonState);
-
-  form.addEventListener("submit", (e) => {
-    if (!hasFile()) {
-      e.preventDefault();
-      alert("Please choose an image first.");
-      return;
-    }
-    setLoading(true);
-  });
-
-  ["dragenter", "dragover"].forEach(evt => {
-    dropzone.addEventListener(evt, (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dropzone.classList.add("dragover");
-    });
-  });
-  ["dragleave", "drop"].forEach(evt => {
-    dropzone.addEventListener(evt, (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dropzone.classList.remove("dragover");
-    });
-  });
-
-  dropzone.addEventListener("drop", (e) => {
-    const files = e.dataTransfer.files;
-    if (!files || !files.length) return;
-    fileInput.files = files;
-    refreshButtonState();
-    if (hasFile()) form.requestSubmit();
-  });
+["dragenter","dragover"].forEach(e=>dz.addEventListener(e,f=>{f.preventDefault();dz.classList.add("dragover")}));
+["dragleave","drop"].forEach(e=>dz.addEventListener(e,f=>{f.preventDefault();dz.classList.remove("dragover")}));
+dz.addEventListener("drop",e=>{fileInput.files=e.dataTransfer.files;btn.disabled=false;form.requestSubmit()});
 </script>
+</body>
+</html>
