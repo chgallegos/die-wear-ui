@@ -14,8 +14,11 @@
       --ok: #16a34a;
       --warn: #f59e0b;
       --bad: #dc2626;
+      --neutral: #94a3b8;
       --border: rgba(255,255,255,.08);
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
     }
+    * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
@@ -25,7 +28,7 @@
       color: var(--text);
       padding: 32px 16px;
     }
-    .container { max-width: 920px; margin: 0 auto; }
+    .container { max-width: 980px; margin: 0 auto; }
     .header { margin-bottom: 14px; }
     .header h1 { margin: 0 0 6px 0; font-size: 28px; letter-spacing: .2px; }
     .header p { margin: 0; color: var(--muted); }
@@ -34,7 +37,7 @@
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
-      margin-top: 10px;
+      margin-top: 12px;
       color: var(--muted);
       font-size: 12px;
     }
@@ -46,22 +49,36 @@
     }
 
     .card {
-      background: rgba(18,24,38,.9);
+      background: rgba(18,24,38,.92);
       border: 1px solid var(--border);
       border-radius: 16px;
       padding: 16px;
-      box-shadow: 0 10px 30px rgba(0,0,0,.35);
+      box-shadow: var(--shadow);
     }
-    .row { display: grid; grid-template-columns: 1.1fr .9fr; gap: 16px; }
-    @media (max-width: 900px) { .row { grid-template-columns: 1fr; } }
 
-    .drop {
-      border: 1px dashed rgba(255,255,255,.18);
+    .row { display: grid; grid-template-columns: 1.05fr .95fr; gap: 16px; }
+    @media (max-width: 940px) { .row { grid-template-columns: 1fr; } }
+
+    /* Dropzone */
+    .dropzone {
+      border: 1px dashed rgba(255,255,255,.20);
       border-radius: 14px;
       padding: 14px;
       background: rgba(0,0,0,.14);
+      transition: border-color .15s ease, background .15s ease;
     }
-    .drop input[type="file"] { width: 100%; }
+    .dropzone.dragover {
+      border-color: rgba(59,130,246,.7);
+      background: rgba(59,130,246,.08);
+    }
+    .file-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    input[type="file"] { width: 100%; }
+
     .btn {
       margin-top: 10px;
       width: 100%;
@@ -73,11 +90,30 @@
       color: white;
       font-weight: 800;
       letter-spacing: .2px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
     }
+    .btn:disabled { opacity: .65; cursor: not-allowed; }
     .btn:hover { filter: brightness(1.05); }
+
+    .btn-secondary {
+      margin-top: 10px;
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      cursor: pointer;
+      background: rgba(255,255,255,.04);
+      color: var(--text);
+      font-weight: 800;
+      letter-spacing: .2px;
+    }
 
     .hint { margin-top: 10px; color: var(--muted); font-size: 13px; line-height: 1.35; }
 
+    /* Preview */
     .preview {
       border: 1px solid var(--border);
       border-radius: 14px;
@@ -85,9 +121,17 @@
       background: rgba(0,0,0,.18);
       display: grid;
       place-items: center;
-      min-height: 280px;
+      min-height: 320px;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.02);
+      position: relative;
     }
     .preview img { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .preview .placeholder {
+      color: var(--muted);
+      padding: 16px;
+      text-align: center;
+      line-height: 1.4;
+    }
 
     /* Status banner */
     .status {
@@ -109,6 +153,7 @@
       font-size: 13px;
       border: 1px solid rgba(255,255,255,.15);
       text-transform: uppercase;
+      white-space: nowrap;
     }
 
     .status.badge-ok { outline: 2px solid rgba(22,163,74,.35); }
@@ -126,20 +171,77 @@
     .status.badge-neutral { outline: 2px solid rgba(148,163,184,.20); }
     .status.badge-neutral .pill { background: rgba(148,163,184,.10); color: #e2e8f0; border-color: rgba(148,163,184,.20); }
 
-    .probs {
-      margin-top: 10px;
+    .meta {
       color: var(--muted);
+      margin-top: 8px;
       font-size: 13px;
-      line-height: 1.5;
-      word-break: break-word;
+      line-height: 1.35;
     }
-    .probs code {
+
+    /* Confidence bars */
+    .bars { margin-top: 12px; }
+    .bar {
+      display: grid;
+      grid-template-columns: 90px 1fr 50px;
+      gap: 10px;
+      align-items: center;
+      margin-top: 8px;
+    }
+    .bar .label { color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: .3px; }
+    .track {
+      height: 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      overflow: hidden;
+    }
+    .fill { height: 100%; width: 0%; border-radius: 999px; }
+    .fill.ok { background: rgba(22,163,74,.6); }
+    .fill.warning { background: rgba(245,158,11,.7); }
+    .fill.replace { background: rgba(220,38,38,.7); }
+    .pct { color: var(--muted); font-size: 12px; font-weight: 800; text-align: right; }
+
+    details {
+      margin-top: 12px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.03);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+    summary {
+      cursor: pointer;
+      color: var(--text);
+      font-weight: 900;
+      letter-spacing: .2px;
+    }
+    .kv { margin-top: 10px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .kv code {
       background: rgba(255,255,255,.06);
       border: 1px solid var(--border);
       padding: 2px 6px;
       border-radius: 8px;
       color: var(--text);
     }
+
+    .error {
+      color: #fecaca;
+      margin-top: 8px;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    /* Spinner */
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,.35);
+      border-top-color: rgba(255,255,255,.95);
+      animation: spin .75s linear infinite;
+      display: none;
+    }
+    .btn.loading .spinner { display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 
@@ -150,24 +252,28 @@
       <p>Upload a die photo → get <b>OK</b>, <b>WARNING</b>, or <b>REPLACE</b>.</p>
 
       <div class="topbar">
-        <span class="chip">Endpoint: {{ endpoint if endpoint else "not set" }}</span>
+        <span class="chip">Endpoint set: {{ "yes" if endpoint_set else "no" }}</span>
+        <span class="chip">Key set: {{ "yes" if key_set else "no" }}</span>
         <span class="chip">Deployment: {{ deployment if deployment else "traffic-split/default" }}</span>
+        <span class="chip">Max upload: {{ max_upload_mb }} MB</span>
       </div>
     </div>
 
     <div class="card">
       <div class="row">
         <div>
-          <!-- ✅ IMPORTANT: action + field name match Flask -->
-          <form method="POST" action="/predict" enctype="multipart/form-data">
-            <div class="drop">
-              <input type="file" name="image" accept="image/*" required />
-              <button class="btn" type="submit">Analyze Photo</button>
+          <form id="uploadForm" method="POST" action="/predict" enctype="multipart/form-data">
+            <div id="dropzone" class="dropzone">
+              <input id="fileInput" type="file" name="image" accept="image/*" required />
+              <button id="analyzeBtn" class="btn" type="submit">
+                <span class="spinner" aria-hidden="true"></span>
+                <span id="btnText">Analyze Photo</span>
+              </button>
+
+              <button id="resetBtn" class="btn-secondary" type="button">Analyze another photo</button>
+
               <div class="hint">
-                For best consistency: keep distance/angle similar and avoid heavy glare.
-                <br/>
-                Tip: If you want to effectively disable NOT_A_DIE (if your model ever adds it),
-                set <code>NOT_DIE_THRESHOLD=1.0</code>.
+                Drag & drop works too. Keep distance/angle similar and avoid heavy glare for best consistency.
               </div>
             </div>
           </form>
@@ -178,40 +284,131 @@
                 <div style="font-weight:900; font-size:16px; letter-spacing:.2px;">
                   Result: {{ result.prediction }}
                 </div>
-
-                <div style="color: var(--muted); margin-top:6px; line-height:1.35;">
+                <div class="meta">
+                  {{ result.recommendation }}
+                  <br/>
                   Routed via: <b>{{ result.deployment }}</b>
-                  {% if result.error %}
-                    <br/><span style="color:#fecaca;">{{ result.error }}</span>
+                  {% if result.latency_ms is not none %}
+                    • Processed in <b>{{ result.latency_ms }}ms</b>
+                  {% endif %}
+                  {% if filename %}
+                    <br/>File: <b>{{ filename }}</b>
                   {% endif %}
                 </div>
+
+                {% if result.error %}
+                  <div class="error">{{ result.error }}</div>
+                {% endif %}
               </div>
               <div class="pill">{{ result.prediction }}</div>
             </div>
 
-            {% if result.probabilities %}
-              <div class="probs">
-                Probabilities:
-                {% if result.probabilities.OK is defined %}<code>OK={{ result.probabilities.OK }}</code>{% endif %}
-                {% if result.probabilities.WARNING is defined %}<code>WARNING={{ result.probabilities.WARNING }}</code>{% endif %}
-                {% if result.probabilities.REPLACE is defined %}<code>REPLACE={{ result.probabilities.REPLACE }}</code>{% endif %}
-                {% if result.probabilities.NOT_A_DIE is defined %}<code>NOT_A_DIE={{ result.probabilities.NOT_A_DIE }}</code>{% endif %}
+            <div class="bars">
+              <div class="bar">
+                <div class="label">OK</div>
+                <div class="track"><div class="fill ok" style="width: {{ result.prob_percent.OK }}%;"></div></div>
+                <div class="pct">{{ result.prob_percent.OK }}%</div>
               </div>
-            {% endif %}
+
+              <div class="bar">
+                <div class="label">WARNING</div>
+                <div class="track"><div class="fill warning" style="width: {{ result.prob_percent.WARNING }}%;"></div></div>
+                <div class="pct">{{ result.prob_percent.WARNING }}%</div>
+              </div>
+
+              <div class="bar">
+                <div class="label">REPLACE</div>
+                <div class="track"><div class="fill replace" style="width: {{ result.prob_percent.REPLACE }}%;"></div></div>
+                <div class="pct">{{ result.prob_percent.REPLACE }}%</div>
+              </div>
+            </div>
+
+            <details>
+              <summary>Model details</summary>
+              <div class="kv">
+                Endpoint: <code>{{ endpoint if endpoint else "not set" }}</code><br/>
+                Routed deployment header: <code>{{ deployment if deployment else "traffic-split/default" }}</code><br/>
+                {% if result.gate and result.gate.present %}
+                  <br/>
+                  Gate present: <code>true</code><br/>
+                  Gate pass: <code>{{ "true" if result.gate.pass else "false" }}</code><br/>
+                  Max prob: <code>{{ result.gate.max_prob }}</code> (threshold <code>{{ result.gate.max_prob_threshold }}</code>)<br/>
+                  Margin: <code>{{ result.gate.margin }}</code> (threshold <code>{{ result.gate.margin_threshold }}</code>)<br/>
+                {% else %}
+                  <br/>Gate present: <code>false</code>
+                {% endif %}
+              </div>
+            </details>
           {% endif %}
         </div>
 
-        <div class="preview">
+        <div class="preview" id="previewBox">
           {% if image_data_url %}
-            <img src="{{ image_data_url }}" alt="Uploaded die photo preview" />
+            <img id="previewImg" src="{{ image_data_url }}" alt="Uploaded die photo preview" />
           {% else %}
-            <div style="color: var(--muted); padding: 16px; text-align:center;">
+            <div class="placeholder">
               Image preview will appear here after you upload.
+              <br/><br/>
+              Tip: Drag an image onto the upload box.
             </div>
           {% endif %}
         </div>
       </div>
     </div>
   </div>
+
+  <script>
+    const form = document.getElementById("uploadForm");
+    const fileInput = document.getElementById("fileInput");
+    const analyzeBtn = document.getElementById("analyzeBtn");
+    const btnText = document.getElementById("btnText");
+    const resetBtn = document.getElementById("resetBtn");
+    const dropzone = document.getElementById("dropzone");
+
+    function setLoading(isLoading) {
+      if (isLoading) {
+        analyzeBtn.classList.add("loading");
+        analyzeBtn.disabled = true;
+        fileInput.disabled = true;
+        btnText.textContent = "Analyzing...";
+      } else {
+        analyzeBtn.classList.remove("loading");
+        analyzeBtn.disabled = false;
+        fileInput.disabled = false;
+        btnText.textContent = "Analyze Photo";
+      }
+    }
+
+    form.addEventListener("submit", () => setLoading(true));
+
+    // Reset clears the file input and reloads to clean state
+    resetBtn.addEventListener("click", () => {
+      window.location.href = "/";
+    });
+
+    // Drag & drop support
+    ["dragenter", "dragover"].forEach(evt => {
+      dropzone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.add("dragover");
+      });
+    });
+    ["dragleave", "drop"].forEach(evt => {
+      dropzone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.remove("dragover");
+      });
+    });
+
+    dropzone.addEventListener("drop", (e) => {
+      const files = e.dataTransfer.files;
+      if (!files || !files.length) return;
+      fileInput.files = files;
+      // Auto-submit when dropped
+      form.requestSubmit();
+    });
+  </script>
 </body>
 </html>
