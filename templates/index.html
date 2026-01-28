@@ -362,13 +362,12 @@
     function setLoading(isLoading) {
       if (isLoading) {
         analyzeBtn.classList.add("loading");
-        analyzeBtn.disabled = true;
-        fileInput.disabled = true;
+        analyzeBtn.disabled = true;   // ✅ OK to disable button
         btnText.textContent = "Analyzing...";
+        // ❌ DO NOT disable fileInput here (disabled inputs are not submitted)
       } else {
         analyzeBtn.classList.remove("loading");
         analyzeBtn.disabled = false;
-        fileInput.disabled = false;
         btnText.textContent = "Analyze Photo";
       }
     }
