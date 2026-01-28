@@ -59,7 +59,6 @@
     .row { display: grid; grid-template-columns: 1.05fr .95fr; gap: 16px; }
     @media (max-width: 940px) { .row { grid-template-columns: 1fr; } }
 
-    /* Dropzone */
     .dropzone {
       border: 1px dashed rgba(255,255,255,.20);
       border-radius: 14px;
@@ -71,13 +70,14 @@
       border-color: rgba(59,130,246,.7);
       background: rgba(59,130,246,.08);
     }
-    .file-row {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      flex-wrap: wrap;
+
+    .filemeta {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
     }
-    input[type="file"] { width: 100%; }
+    .filemeta b { color: var(--text); }
 
     .btn {
       margin-top: 10px;
@@ -95,7 +95,7 @@
       justify-content: center;
       gap: 10px;
     }
-    .btn:disabled { opacity: .65; cursor: not-allowed; }
+    .btn:disabled { opacity: .55; cursor: not-allowed; }
     .btn:hover { filter: brightness(1.05); }
 
     .btn-secondary {
@@ -113,7 +113,6 @@
 
     .hint { margin-top: 10px; color: var(--muted); font-size: 13px; line-height: 1.35; }
 
-    /* Preview */
     .preview {
       border: 1px solid var(--border);
       border-radius: 14px;
@@ -123,7 +122,6 @@
       place-items: center;
       min-height: 320px;
       box-shadow: inset 0 0 0 1px rgba(255,255,255,.02);
-      position: relative;
     }
     .preview img { width: 100%; height: 100%; object-fit: contain; display: block; }
     .preview .placeholder {
@@ -133,7 +131,6 @@
       line-height: 1.4;
     }
 
-    /* Status banner */
     .status {
       margin-top: 14px;
       border-radius: 14px;
@@ -178,7 +175,6 @@
       line-height: 1.35;
     }
 
-    /* Confidence bars */
     .bars { margin-top: 12px; }
     .bar {
       display: grid;
@@ -208,12 +204,7 @@
       border-radius: 12px;
       padding: 10px 12px;
     }
-    summary {
-      cursor: pointer;
-      color: var(--text);
-      font-weight: 900;
-      letter-spacing: .2px;
-    }
+    summary { cursor: pointer; color: var(--text); font-weight: 900; letter-spacing: .2px; }
     .kv { margin-top: 10px; color: var(--muted); font-size: 13px; line-height: 1.45; }
     .kv code {
       background: rgba(255,255,255,.06);
@@ -223,17 +214,10 @@
       color: var(--text);
     }
 
-    .error {
-      color: #fecaca;
-      margin-top: 8px;
-      font-size: 13px;
-      line-height: 1.35;
-    }
+    .error { color: #fecaca; margin-top: 8px; font-size: 13px; line-height: 1.35; }
 
-    /* Spinner */
     .spinner {
-      width: 16px;
-      height: 16px;
+      width: 16px; height: 16px;
       border-radius: 50%;
       border: 2px solid rgba(255,255,255,.35);
       border-top-color: rgba(255,255,255,.95);
@@ -265,7 +249,16 @@
           <form id="uploadForm" method="POST" action="/predict" enctype="multipart/form-data">
             <div id="dropzone" class="dropzone">
               <input id="fileInput" type="file" name="image" accept="image/*" required />
-              <button id="analyzeBtn" class="btn" type="submit">
+
+              <div id="fileMeta" class="filemeta">
+                {% if filename %}
+                  Selected: <b>{{ filename }}</b>
+                {% else %}
+                  Selected: <b>none</b>
+                {% endif %}
+              </div>
+
+              <button id="analyzeBtn" class="btn" type="submit" disabled>
                 <span class="spinner" aria-hidden="true"></span>
                 <span id="btnText">Analyze Photo</span>
               </button>
@@ -364,6 +357,7 @@
     const btnText = document.getElementById("btnText");
     const resetBtn = document.getElementById("resetBtn");
     const dropzone = document.getElementById("dropzone");
+    const fileMeta = document.getElementById("fileMeta");
 
     function setLoading(isLoading) {
       if (isLoading) {
@@ -379,14 +373,32 @@
       }
     }
 
-    form.addEventListener("submit", () => setLoading(true));
+    function hasFile() {
+      return fileInput.files && fileInput.files.length > 0;
+    }
 
-    // Reset clears the file input and reloads to clean state
+    function refreshButtonState() {
+      analyzeBtn.disabled = !hasFile();
+      const name = hasFile() ? fileInput.files[0].name : "none";
+      fileMeta.innerHTML = `Selected: <b>${name}</b>`;
+    }
+
+    fileInput.addEventListener("change", refreshButtonState);
+    window.addEventListener("load", refreshButtonState);
+
+    form.addEventListener("submit", (e) => {
+      if (!hasFile()) {
+        e.preventDefault();
+        alert("Please choose an image first.");
+        return;
+      }
+      setLoading(true);
+    });
+
     resetBtn.addEventListener("click", () => {
       window.location.href = "/";
     });
 
-    // Drag & drop support
     ["dragenter", "dragover"].forEach(evt => {
       dropzone.addEventListener(evt, (e) => {
         e.preventDefault();
@@ -406,8 +418,8 @@
       const files = e.dataTransfer.files;
       if (!files || !files.length) return;
       fileInput.files = files;
-      // Auto-submit when dropped
-      form.requestSubmit();
+      refreshButtonState();
+      if (hasFile()) form.requestSubmit();
     });
   </script>
 </body>
